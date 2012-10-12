@@ -9,8 +9,6 @@
 extern "C" {
 #endif 
 
-#define LOLVAROVERHEAD 9
-
 ///
 ///	Low Level Message implementation in C for use on MSP and Blackfin.
 /// Struct LolMessage is the container for the message and can be serialized using
@@ -33,7 +31,7 @@ typedef struct LolMessage
 } __attribute__((packed)) LolMessage;
 
 /// Conveniently initialize a LolMessage struct using these functions
-void lolmsgInit(LolMessage* msg, uint8_t address, uint8_t command, const uint8_t* data, uint32_t length);
+void lolmsgInit(LolMessage* msg, uint8_t address, uint8_t command, uint8_t* data, uint32_t length);
 
 /// 
 /// Serialization routine.
@@ -60,7 +58,7 @@ typedef struct LolParseContext
 	uint16_t checksum;
 	uint32_t bufLength;
 	uint8_t* buf; 
-} __attribute__((packed)) LolParseContext;
+} LolParseContext;
 
 /// 
 /// buf must be minimum of 8 bytes, a buf larger than 8 allows receiving of variable payloads

@@ -9,11 +9,7 @@
 #define MSGSTARTMASK 0xf0
 
 #define MSGISVARIABLE 1
-
-#define FIXEDSIZE 8
-
-#define FIXEDHEADERSIZE 3
-#define VARHEADERSIZE 7
+#define LOLVAROVERHEAD 9
 
 // Serialized LOLMessage bytes
 // byte 0:
@@ -26,7 +22,10 @@
 // byte 8-x: data
 // byte x+1: data checksum
 
-void lolmsgInit(LolMessage* msg, uint8_t address, uint8_t command, const uint8_t* data, uint32_t length)
+//work round for 64bit machine
+const static uint32_t dataOffsetPose = sizeof(LolMessage);
+
+void lolmsgInit(LolMessage* msg, uint8_t address, uint8_t command, uint8_t* data, uint32_t length)
 {
     msg->command = command;
     msg->address = address;
@@ -145,6 +144,7 @@ int lolmsgParse(LolParseContext* ctx, uint8_t* bytes, uint32_t inlength)
                     state = LOLPARSE_ERR_NOSTART;
                     goto end;
                 }
+                
                 if (firstbyte & MSGISVARIABLE)
                 {
                     state = LOLPARSE_VARIABLE;
@@ -154,12 +154,12 @@ int lolmsgParse(LolParseContext* ctx, uint8_t* bytes, uint32_t inlength)
             }
             break;
         case LOLPARSE_VARIABLE: case_variable:
-                                // Here we parse the header of a variable type message
+            // Here we parse the header of a variable type message
                                 while (parsed < inlength)
                                 {
                                     uint8_t inbyte = *inbytes++;
                                     parsed++;
-                                //    printf("parsed: %#x -- %#x\n", parsed, inbyte);
+                                    //    printf("parsed: %#x -- %#x\n", parsed, inbyte);
                                     switch (pos)
                                     {
                                         case 0:
@@ -198,8 +198,8 @@ int lolmsgParse(LolParseContext* ctx, uint8_t* bytes, uint32_t inlength)
                                             }
                                             else
                                             {
-                                                outmsg->data = outbytes + 10;
-                                                pos = 10;
+                                                outmsg->data = outbytes + dataOffsetPose; 
+                                                pos = dataOffsetPose;
                                                 checksum = CHECKSUMINIT;
                                                 state = LOLPARSE_VARIABLE_PL;
                                                 goto case_variable_pl;
@@ -212,7 +212,7 @@ int lolmsgParse(LolParseContext* ctx, uint8_t* bytes, uint32_t inlength)
         case LOLPARSE_VARIABLE_PL : case_variable_pl:
                                     // Here we parse the payload of a variable type message
                                     {
-                                        uint32_t end = 10 + outmsg->length;
+                                        uint32_t end = dataOffsetPose + outmsg->length;
                                         while (parsed < inlength)
                                         {
                                             uint8_t inbyte = *inbytes++;
