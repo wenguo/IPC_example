@@ -5,6 +5,8 @@
 */
 #ifndef IPC_HH
 #define IPC_HH
+
+#include <pthread.h>
 #include "lolmsg.h"
 #include "bytequeue.h"
 

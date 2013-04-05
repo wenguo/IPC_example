@@ -26,7 +26,7 @@ bool IPC::Start(const char* h, int p, bool s)
     else
         host=NULL;
 
-    mutex_txq=PTHREAD_MUTEX_INITIALIZER; 
+    pthread_mutex_init(&mutex_txq, NULL);
     //create monitoring thread
     pthread_create(&monitor_thread, 0, Monitoring, this);
 
