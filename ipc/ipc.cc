@@ -5,6 +5,7 @@
 */
 #include <pthread.h>
 #include <string.h>
+#include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <stdio.h>
@@ -42,37 +43,30 @@ void * IPC::Monitoring(void * ptr)
         ret = ipc->StartServer(ipc->port);
     else
         ret = ipc->ConnectToServer(ipc->host, ipc->port);
-
-    if(ret)
-    {
-        pthread_create(&ipc->receiving_thread, 0, Receiving, ptr);
-        pthread_create(&ipc->transmiting_thread, 0, Transmiting, ptr);
-    }
-
-
-
 }
 
-void * IPC::Receiving(void * ptr)
+void * IPC::Receiving(void * p)
 {
-    IPC* ipc = (IPC*)ptr;
 
-    printf("create receiving thread\n");
+    user_pointer * ptr = (user_pointer*)p;
+    IPC * ipc = (IPC*)(ptr->ipc);
+    printf("create receiving thread %d\n", ptr->sock);
 
     //main loop, keep reading
     unsigned char rx_buffer[IPCBLOCKSIZE];
 
-    lolmsgParseInit(&ipc->parseContext, new uint8_t[IPCLOLBUFFERSIZE], IPCLOLBUFFERSIZE);
+    LolParseContext parseContext;
+    lolmsgParseInit(&parseContext, new uint8_t[IPCLOLBUFFERSIZE], IPCLOLBUFFERSIZE);
 
     while(1)
     {
         //reading
         memset(rx_buffer, 0, IPCBLOCKSIZE);
-        int received = read(ipc->clientsockfd,rx_buffer, IPCBLOCKSIZE);
+        int received = read(ptr->sock,rx_buffer, IPCBLOCKSIZE);
         if (received <= 0) 
         {
             printf("ERROR read to socket : %d -- it seems connection lost\n", received);
-            ipc->connected = false;
+            //ipc->connected = false;
             break;
         }
         else
@@ -81,10 +75,13 @@ void * IPC::Receiving(void * ptr)
             int parsed = 0;
             while (parsed < received)
             {
-                parsed += lolmsgParse(&ipc->parseContext, rx_buffer + parsed, received - parsed);
-                LolMessage* msg = lolmsgParseDone(&ipc->parseContext);
+                parsed += lolmsgParse(&parseContext, rx_buffer + parsed, received - parsed);
+                LolMessage* msg = lolmsgParseDone(&parseContext);
                 if(msg!=NULL && ipc->callback)
+                {
+                    printf("received data from %s : %d\n",inet_ntoa(ptr->addr.sin_addr),ntohs(ptr->addr.sin_port));
                     ipc->callback(msg, ipc->user_data);
+                }
             }
         }
     }
@@ -94,24 +91,25 @@ void * IPC::Receiving(void * ptr)
     pthread_exit(NULL);
 }
 
-void * IPC::Transmiting(void *ptr)
+void * IPC::Transmiting(void *p)
 {
-    printf("create transmiting thread\n");
-    IPC * ipc = (IPC*) ptr;
+    user_pointer * ptr = (user_pointer*)p;
+    IPC * ipc = (IPC*)ptr->ipc;
+    printf("create transmiting thread %d\n", ptr->sock);
     uint8_t txBuf[IPCBLOCKSIZE];
 
     while(1)
     {
+            pthread_mutex_lock(&ipc->mutex_txq);
         if(BQCount(&ipc->txq) > 0 )
         {
-            pthread_mutex_lock(&ipc->mutex_txq);
             register int byteCount = BQPopBytes(&ipc->txq, txBuf, IPCBLOCKSIZE);
-            pthread_mutex_unlock(&ipc->mutex_txq);
 
-            int n = write(ipc->clientsockfd, txBuf, byteCount);
+            int n = write(ptr->sock, txBuf, byteCount);
             if(n<0)
                 printf("write error %d\n", n);
         }
+            pthread_mutex_unlock(&ipc->mutex_txq);
 
         usleep(100000);
     }
@@ -149,7 +147,39 @@ bool IPC::StartServer(int port)
             binded  = true;
     }
 
-    return ListenForConnection(sockfd);
+    if(sockfd<0)
+        return false;
+
+    printf("Listening on port %d\n", port);
+
+    socklen_t clilen;
+    //listening for connection
+    listen(sockfd,5);
+
+    while(1)
+    {
+        struct sockaddr_in client;
+        clilen = sizeof(client);
+        clientsockfd = accept(sockfd, (struct sockaddr *) &client, &clilen);
+
+        printf("accept\n");
+        if (clientsockfd < 0) 
+        {
+            printf("ERROR on accept\n");
+        }
+        else
+        {
+            client_sockfds.push_back(clientsockfd);
+            user_pointer *ptr = new user_pointer;
+            ptr->ipc = this;
+            ptr->sock = clientsockfd;
+            ptr->addr = client;
+
+            pthread_create(&(receiving_thread), 0, Receiving, ptr);
+            pthread_create(&(transmiting_thread), 0, Transmiting, ptr);
+        }
+
+    }
 }
 
 bool IPC::ListenForConnection(int sockfd)
@@ -200,8 +230,16 @@ bool IPC::ConnectToServer(const char * host, int port)
         printf("ERROR connecting, exit monitor thread\n");
         return false;
     }
-    printf("Success to connect to Server [%s:%d]\n", host, port);
+    printf("Success to connect to Server [%s:%d] @ %d\n", host, port, clientsockfd);
 
+    client_sockfds.push_back(clientsockfd);
+    user_pointer *ptr = new user_pointer;
+    ptr->ipc = this;
+    ptr->sock = clientsockfd;
+    ptr->addr = serv_addr;
+
+    pthread_create(&receiving_thread, 0, Receiving, ptr);
+    pthread_create(&transmiting_thread, 0, Transmiting, ptr);
     return true;
 }
 

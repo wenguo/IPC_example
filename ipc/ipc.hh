@@ -7,6 +7,7 @@
 #define IPC_HH
 
 #include <pthread.h>
+#include <vector>
 #include "lolmsg.h"
 #include "bytequeue.h"
 
@@ -15,9 +16,16 @@
 #define IPCBLOCKSIZE  10240
 
 namespace IPC{
+    typedef struct
+    {
+        void * ipc;
+        sockaddr_in addr; 
+        int sock;
+    }user_pointer;
 
 class IPC
 {
+
     typedef void (*Callback)(const LolMessage *, void *);
 
     public:
@@ -37,6 +45,7 @@ class IPC
         static void * Monitoring(void *ptr);
         static void * Receiving(void *ptr);
         static void * Transmiting(void *ptr);
+        static void * Listening(void *ptr);
         bool StartServer(int port);
         bool ConnectToServer(const char * host, int port);
         bool ListenForConnection(int sockfd);
@@ -52,11 +61,13 @@ class IPC
         bool connected;
         uint8_t txbuffer[IPCTXBUFFERSIZE];
         ByteQueue txq;
-        LolParseContext parseContext;
         pthread_t monitor_thread;
         pthread_t receiving_thread;
         pthread_t transmiting_thread;
+        pthread_t listening_thread;
         pthread_mutex_t mutex_txq;
+
+        std::vector<int> client_sockfds;
 
 };
 

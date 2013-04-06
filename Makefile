@@ -10,8 +10,8 @@ VPATH +=./ipc
 # Change this to whatever name you like
 EXE = test 
 
-CXXFLAGS =-O2 -Wall
-CFLAGS = -O2 -Wall
+CXXFLAGS =-O2 -ggdb -Wall
+CFLAGS = -O2 -ggdb -Wall
 
 
 CXXFLAGS += $(patsubst %, -I%, $(IPATH))

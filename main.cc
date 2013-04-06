@@ -14,8 +14,7 @@ int main(int argc, const char**argv)
 {
     bool is_client = false;
     IPC::IPC client_ipc;
-    IPC::IPC monitor_ipc[MAX_CLIENT];
-    int port[MAX_CLIENT]={10000,10001,10002,10003};
+    IPC::IPC monitor_ipc;
 
     if(argc == 4 && strcmp(argv[1], "-c")==0)
     {
@@ -23,20 +22,17 @@ int main(int argc, const char**argv)
         int port_index;
         sscanf(argv[3], "%d", &port_index);
         port_index = port_index % 4; //in case not [0-3] is given
-        printf("I am client tring to connect to %s:%d\n", argv[2], port[port_index]);
+        printf("I am client tring to connect to %s:%d\n", argv[2], 10000);
         client_ipc.SetCallback(ClientConnection, (void*)&client_ipc);
-        client_ipc.Start(argv[2], port[port_index], false);
+        client_ipc.Start(argv[2], 10000, false);
 
     }
     else if(argc == 2 && strcmp(argv[1], "-h")==0)
     {
         printf("I am a server\n");
 
-        for(int i=0;i<MAX_CLIENT;i++)
-        {
-            monitor_ipc[i].SetCallback(ServerConnection, (void*)&monitor_ipc[i]);
-            monitor_ipc[i].Start("localhost", port[i], true);
-        }
+            monitor_ipc.SetCallback(ServerConnection, (void*)&monitor_ipc);
+            monitor_ipc.Start("localhost", 10000, true);
     }
     else
     {
@@ -49,6 +45,7 @@ int main(int argc, const char**argv)
     //wait for ever
     while(1)
     {
+        usleep(1000000);
         if(is_client)
         {
             printf("Request Link_info\n");
@@ -56,7 +53,6 @@ int main(int argc, const char**argv)
             client_ipc.SendData(IPC::LINK_INFO_REQ, data, 2);
         }
 
-        usleep(1000000);
     }
     return 0;
 }
