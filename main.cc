@@ -7,8 +7,8 @@
 #include "ipc_interface.hh"
 #define MAX_CLIENT 4
 
-static void ServerConnection(const LolMessage*msg, void *ptr);
-static void ClientConnection(const LolMessage*msg, void *ptr);
+static void ServerConnection(const LolMessage*msg, IPC::Connection *conn,  void *ptr);
+static void ClientConnection(const LolMessage*msg, IPC::Connection *conn, void *ptr);
 
 int main(int argc, const char**argv)
 {
@@ -16,12 +16,9 @@ int main(int argc, const char**argv)
     IPC::IPC client_ipc;
     IPC::IPC monitor_ipc;
 
-    if(argc == 4 && strcmp(argv[1], "-c")==0)
+    if(argc == 3 && strcmp(argv[1], "-c")==0)
     {
         is_client = true;
-        int port_index;
-        sscanf(argv[3], "%d", &port_index);
-        port_index = port_index % 4; //in case not [0-3] is given
         printf("I am client tring to connect to %s:%d\n", argv[2], 10000);
         client_ipc.SetCallback(ClientConnection, (void*)&client_ipc);
         client_ipc.Start(argv[2], 10000, false);
@@ -37,7 +34,7 @@ int main(int argc, const char**argv)
     else
     {
         printf("help:\n");
-        printf("main -c [portid: 0 - 3]  :start as client\n");
+        printf("main -c host  :start as client\n");
         printf("main -h  :start as server\n");
         exit(1);
     }
@@ -58,7 +55,7 @@ int main(int argc, const char**argv)
 }
 
 
-void ServerConnection(const LolMessage*msg, void *ptr)
+void ServerConnection(const LolMessage* msg, IPC::Connection* conn, void *ptr)
 {
     printf("received something\n");
     IPC::IPC *monitor_ipc = (IPC::IPC*)ptr;
@@ -67,7 +64,7 @@ void ServerConnection(const LolMessage*msg, void *ptr)
         case IPC::LINK_INFO_REQ:
             {
                 unsigned char data[10] = {0,1,2,3,4,5,6,7,8,9};
-                monitor_ipc->SendData(IPC::LINK_INFO, data, 10);
+                conn->SendData(IPC::LINK_INFO, data, 10);
             }
             break;
         default:
@@ -75,7 +72,7 @@ void ServerConnection(const LolMessage*msg, void *ptr)
     }
 }
 
-void ClientConnection(const LolMessage*msg, void *ptr)
+void ClientConnection(const LolMessage*msg, IPC::Connection * conn, void *ptr)
 {
     IPC::IPC *client_ipc = (IPC::IPC*)ptr;
     switch(msg->command)

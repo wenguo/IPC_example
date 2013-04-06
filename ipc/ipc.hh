@@ -7,6 +7,15 @@
 #define IPC_HH
 
 #include <pthread.h>
+#include <string.h>
+#include <stdio.h>
+#include <arpa/inet.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#include <unistd.h>
+#include <sstream>
 #include <vector>
 #include "lolmsg.h"
 #include "bytequeue.h"
@@ -16,59 +25,65 @@
 #define IPCBLOCKSIZE  10240
 
 namespace IPC{
-    typedef struct
-    {
+
+class Connection;
+typedef void (*Callback)(const LolMessage *, Connection *, void *);
+
+class Connection
+{
+    public:
+        Connection();
+        ~Connection();
+        inline void SetCallback(Callback c, void * u) {callback = c; user_data = u;}
+        bool connected;
+
+        bool SendData(const uint8_t type, uint8_t *data, int len);
+        bool Start();
+        
         void * ipc;
+        int sockfds;
         sockaddr_in addr; 
-        int sock;
-    }user_pointer;
+
+    private:
+        pthread_t receiving_thread;
+        pthread_t transmiting_thread;
+        static void * Receiving(void *ptr);
+        static void * Transmiting(void *ptr);
+        LolParseContext parseContext;
+        Callback callback;
+        void * user_data;
+        ByteQueue txq;
+        uint8_t txbuffer[IPCTXBUFFERSIZE];
+        pthread_mutex_t mutex_txq;
+
+};
 
 class IPC
 {
-
-    typedef void (*Callback)(const LolMessage *, void *);
-
     public:
-        IPC():sockfd(-1),clientsockfd(-1),callback(NULL),port(10000),host(NULL)
-        {
-            BQInit(&txq, txbuffer, IPCTXBUFFERSIZE);
-            server = true;
-            user_data = NULL;
-        }
-        ~IPC(){};
+        IPC();
+        ~IPC();
 
         bool Start(const char *host,int port, bool server);
         bool SendData(const uint8_t type, uint8_t *data, int len);
-        inline bool SetCallback(Callback c, void * u) {callback = c; user_data = u;}
+        inline void SetCallback(Callback c, void * u) {callback = c; user_data = u;}
 
     private:
         static void * Monitoring(void *ptr);
-        static void * Receiving(void *ptr);
-        static void * Transmiting(void *ptr);
         static void * Listening(void *ptr);
         bool StartServer(int port);
         bool ConnectToServer(const char * host, int port);
-        bool ListenForConnection(int sockfd);
-        
-        Callback callback;
-        void * user_data;
 
         int sockfd;
-        int clientsockfd;
         bool server;
         int port;
         char* host;
-        bool connected;
-        uint8_t txbuffer[IPCTXBUFFERSIZE];
-        ByteQueue txq;
         pthread_t monitor_thread;
-        pthread_t receiving_thread;
-        pthread_t transmiting_thread;
         pthread_t listening_thread;
-        pthread_mutex_t mutex_txq;
-
-        std::vector<int> client_sockfds;
-
+        std::vector<Connection*> connections;
+        
+        Callback callback;
+        void * user_data;
 };
 
 }//end of namespace
