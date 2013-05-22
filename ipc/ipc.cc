@@ -20,12 +20,12 @@
 namespace IPC{
 
 #define Close(fd) {\
-    printf("\tclose socket %d from line %d\n",fd, __LINE__);\
+    printf("\tclose socket %d (line %d)\n",fd, __LINE__);\
     close(fd);\
 }
 
 #define Shutdown(fd, val){\
-    printf("\tshutdown socket %d from line %d\n", fd, __LINE__);\
+    printf("\tshutdown socket %d (line %d)\n", fd, __LINE__);\
     int ret=shutdown(fd,SHUT_RDWR);\
     if(ret<0){\
     perror("error");\
@@ -47,11 +47,11 @@ Connection::Connection()
 Connection::~Connection()
 {
     //clean up
-    printf("connection removed %s:%d\n", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
+    //printf("connection removed %s:%d\n", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
     connected = false;
     if(sockfds>=0)
     {
-        printf("connection shutdown %d\n", sockfds);
+       // printf("connection shutdown %d\n", sockfds);
         Close(sockfds);
     }
 }
@@ -207,7 +207,6 @@ bool IPC::StartServer(int port)
         int flag = 1;
         if (setsockopt(sockfd,SOL_SOCKET,SO_REUSEADDR,&flag,sizeof(int)) == -1)
             exit(1);
-        printf("flag: %d\n", flag);
 
         memset((char*) &serv_addr, 0, sizeof(serv_addr));
         serv_addr.sin_family = AF_INET;
@@ -246,7 +245,7 @@ bool IPC::StartServer(int port)
         }
         else
         {
-            printf("%d accept %d\n", sockfd, clientsockfd);
+            printf("accept connection from %s:%d\n", inet_ntoa(client.sin_addr), ntohs(client.sin_port));
             Connection *conn = new Connection;
             conn->sockfds = clientsockfd;
             conn->addr = client;
@@ -337,7 +336,7 @@ bool IPC::SendData(const uint8_t type, uint8_t *data, int data_size)
 {
     for(unsigned int i=0; i< connections.size(); i++)
     {
-        if(connections[i]->connected)
+        if(connections[i] && connections[i]->connected)
             connections[i]->SendData(type, data, data_size);
     }
     return true;
@@ -348,7 +347,7 @@ bool IPC::SendData(const uint32_t dest, const uint8_t type, uint8_t * data, int 
     bool ret = false;
     for(unsigned int i=0; i< connections.size(); i++)
     {
-        if(connections[i]->addr.sin_addr.s_addr == dest && connections[i]->connected)
+        if(connections[i] && connections[i]->addr.sin_addr.s_addr == dest && connections[i]->connected)
         {
             ret = connections[i]->SendData(type, data, data_size);
             break; // assumed only one connection from one address
@@ -364,9 +363,11 @@ int IPC::RemoveBrokenConnections()
     while(it != connections.end())
     {
         //remove broken connection
-        if(!(*it)->connected &!(*it)->transmiting_thread_running && !(*it)->receiving_thread_running)
+        if((*it) == NULL)
+            it = connections.erase(it);
+        else if(!(*it)->connected &!(*it)->transmiting_thread_running && !(*it)->receiving_thread_running)
         { 
-            printf("\tremove broken connection\n");
+            printf("\tremove broken connection from %s:%d\n", inet_ntoa((*it)->addr.sin_addr), ntohs((*it)->addr.sin_port));
             delete *it;
             it = connections.erase(it);
             count++;

@@ -93,7 +93,7 @@ int main(int argc, const char**argv)
 
 void ServerConnection(const LolMessage*msg,void *conn, void *ptr)
 {
-    printf("received something\n");
+  //  printf("received something\n");
     //IPC::IPC *monitor_ipc = (IPC::IPC*)ptr;
     switch(msg->command)
     {
@@ -127,7 +127,7 @@ void ClientConnection(const LolMessage*msg, void *conn, void *ptr)
 }
 void signalHandler(int dummy)
 {
-    printf("user quit signals captured: ctrl + c \n");
+ //   printf("user quit signals captured: ctrl + c \n");
     userQuit = true;
     count++;
 }
