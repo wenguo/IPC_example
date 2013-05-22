@@ -20,14 +20,14 @@
 #include "lolmsg.h"
 #include "bytequeue.h"
 
-#define IPCLOLBUFFERSIZE 320*240*3  
-#define IPCTXBUFFERSIZE  10240
-#define IPCBLOCKSIZE  10240
+#define IPCLOLBUFFERSIZE 264 //=256 + 8 
+#define IPCTXBUFFERSIZE 2048 
+#define IPCBLOCKSIZE 256 
 
 namespace IPC{
 
 class Connection;
-typedef void (*Callback)(const LolMessage *, Connection *, void *);
+typedef void (*Callback)(const LolMessage *msg, void * connection, void * user_ptr);
 
 class Connection
 {
@@ -43,6 +43,9 @@ class Connection
         void * ipc;
         int sockfds;
         sockaddr_in addr; 
+
+        bool transmiting_thread_running;
+        bool receiving_thread_running;
 
     private:
         pthread_t receiving_thread;
@@ -65,8 +68,13 @@ class IPC
         ~IPC();
 
         bool Start(const char *host,int port, bool server);
+        void Stop();
         bool SendData(const uint8_t type, uint8_t *data, int len);
+        bool SendData(const uint32_t dest, const uint8_t type, uint8_t * data, int len);
+        int RemoveBrokenConnections();
         inline void SetCallback(Callback c, void * u) {callback = c; user_data = u;}
+        inline bool Server(){return server;}
+        std::vector<Connection*> *Connections(){ return &connections;}
 
     private:
         static void * Monitoring(void *ptr);
@@ -81,6 +89,7 @@ class IPC
         pthread_t monitor_thread;
         pthread_t listening_thread;
         std::vector<Connection*> connections;
+        bool monitoring_thread_running;
         
         Callback callback;
         void * user_data;
