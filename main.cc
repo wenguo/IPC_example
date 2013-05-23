@@ -66,8 +66,6 @@ int main(int argc, const char**argv)
                 unsigned char data[2]={0};
                 client_ipc.SendData(IPC::LINK_INFO_REQ, data, 2);
             }
-            monitor_ipc.RemoveBrokenConnections();
-//            client_ipc.RemoveBrokenConnections();
             usleep(1000000);
         }
 
@@ -81,10 +79,9 @@ int main(int argc, const char**argv)
             monitor_ipc.Stop();
         
         usleep(1000000);
-        monitor_ipc.RemoveBrokenConnections();
-        //client_ipc.RemoveBrokenConnections();
 
     }
+    printf("this is normal exit\n");
 
 
     return 0;

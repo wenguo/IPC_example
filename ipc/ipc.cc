@@ -88,6 +88,10 @@ bool IPC::Start(const char* h, int p, bool s)
     else
         host=NULL;
 
+    int broken_connections = RemoveBrokenConnections();
+    if(broken_connections >0)
+    printf("IPC restarted : %d broken connections removed\n", broken_connections);
+
     //create monitoring thread
     pthread_create(&monitor_thread, 0, Monitoring, this);
     return true;
@@ -107,6 +111,7 @@ void * IPC::Monitoring(void * ptr)
 
     ipc->monitoring_thread_running = false;
 
+    printf("------ exit monitoring thread -----\n");
     return NULL;
 }
 
@@ -206,7 +211,10 @@ bool IPC::StartServer(int port)
         //set sockfd options
         int flag = 1;
         if (setsockopt(sockfd,SOL_SOCKET,SO_REUSEADDR,&flag,sizeof(int)) == -1)
+        {
+            perror("Set sock option failed:");
             exit(1);
+        }
 
         memset((char*) &serv_addr, 0, sizeof(serv_addr));
         serv_addr.sin_family = AF_INET;
@@ -214,7 +222,7 @@ bool IPC::StartServer(int port)
         serv_addr.sin_port = htons(port);
         if(bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) 
         {
-            printf("ERROR on binding, try again in 1 second\n");
+            perror("Socket bind failed:");
             binded = false;
             Close(sockfd);
             usleep(1000000);
@@ -258,6 +266,8 @@ bool IPC::StartServer(int port)
     }
 
     Close(sockfd);
+    sockfd = -1;
+
 
     return true;
 }
@@ -299,16 +309,18 @@ bool IPC::ConnectToServer(const char * host, int port)
 
     //wait until user quit
     while(monitoring_thread_running)
-        usleep(10000);
+        usleep(20000);
 
-    Shutdown(conn->sockfds, 0);
+    Shutdown(conn->sockfds, 2);
 
     //wait until all thread quit
-    while(conn && !conn->transmiting_thread_running && !conn->receiving_thread_running)
-        usleep(1000000);
+    while(conn->transmiting_thread_running || conn->receiving_thread_running)
+        usleep(30000);
 
     //  delete conn;
     Close(conn->sockfds);
+    conn->sockfds = -1;
+
     return true;
 }
 
@@ -316,7 +328,11 @@ bool Connection::SendData(const uint8_t type, uint8_t *data, int data_size)
 {
     //printf("Send data [%s] to %s:%d\n", message_names[type], inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
     LolMessage msg;
+#ifdef IPC_TEST
     lolmsgInit(&msg, 0, type, data, data_size);
+#else
+    lolmsgInit(&msg, type, data, data_size);
+#endif
     int len = lolmsgSerializedSize(&msg);
     uint8_t buf[len];
     lolmsgSerialize(&msg, buf);
@@ -365,7 +381,7 @@ int IPC::RemoveBrokenConnections()
         //remove broken connection
         if((*it) == NULL)
             it = connections.erase(it);
-        else if(!(*it)->connected &!(*it)->transmiting_thread_running && !(*it)->receiving_thread_running)
+        else if(!(*it)->connected)
         { 
             printf("\tremove broken connection from %s:%d\n", inet_ntoa((*it)->addr.sin_addr), ntohs((*it)->addr.sin_port));
             delete *it;
@@ -375,6 +391,20 @@ int IPC::RemoveBrokenConnections()
         else
             it++;
     }
+    return count;
+}
+
+int IPC::BrokenConnections()
+{
+    int count = 0;
+    std::vector<Connection*>::iterator it = connections.begin();
+    while(it != connections.end())
+    {
+        if(!(*it) || !(*it)->connected)
+            count++;
+        it++;
+    }
+
     return count;
 }
 

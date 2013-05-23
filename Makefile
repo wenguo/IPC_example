@@ -10,9 +10,14 @@ VPATH +=./ipc
 # Change this to whatever name you like
 EXE = test 
 
-CXXFLAGS =-O2 -ggdb -Wall
-CFLAGS = -O2 -ggdb -Wall
 
+CXXFLAGS =-O2 -ggdb -Wall -DIPC_TEST 
+CFLAGS = -O2 -ggdb -Wall -DIPC_TEST
+
+CXX=bfin-linux-uclibc-g++
+CC=bfin-linux-uclibc-gcc
+CXXFLAGS +=-mcpu=bf561
+CFLAGS +=-mcpu=bf561 
 
 CXXFLAGS += $(patsubst %, -I%, $(IPATH))
 LDFLAGS = -lpthread

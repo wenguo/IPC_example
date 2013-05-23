@@ -71,7 +71,7 @@ class IPC
         void Stop();
         bool SendData(const uint8_t type, uint8_t *data, int len);
         bool SendData(const uint32_t dest, const uint8_t type, uint8_t * data, int len);
-        int RemoveBrokenConnections();
+        int BrokenConnections();
         inline void SetCallback(Callback c, void * u) {callback = c; user_data = u;}
         inline bool Server(){return server;}
         std::vector<Connection*> *Connections(){ return &connections;}
@@ -81,6 +81,7 @@ class IPC
         static void * Listening(void *ptr);
         bool StartServer(int port);
         bool ConnectToServer(const char * host, int port);
+        int RemoveBrokenConnections();
 
         int sockfd;
         bool server;
