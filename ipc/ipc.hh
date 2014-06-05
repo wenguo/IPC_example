@@ -39,6 +39,7 @@ class Connection
 
         bool SendData(const uint8_t type, uint8_t *data, int len);
         bool Start();
+        void Disconnect();
         
         void * ipc;
         int sockfds;
@@ -68,15 +69,22 @@ class IPC
         ~IPC();
 
         bool Start(const char *host,int port, bool server);
+        bool Start(uint32_t ip, int port, bool server);
         void Stop();
+        inline bool Running() {return monitoring_thread_running;}
         bool SendData(const uint8_t type, uint8_t *data, int len);
-        bool SendData(const uint32_t dest, const uint8_t type, uint8_t * data, int len);
+        bool SendData(const uint32_t dst, const uint8_t type, uint8_t * data, int len);
         int BrokenConnections();
         inline void SetCallback(Callback c, void * u) {callback = c; user_data = u;}
         inline bool Server(){return server;}
         std::vector<Connection*> *Connections(){ return &connections;}
 
+        void Name(const char *str){free(name);name=strdup(str);}
+        const char * Name(){return name;};
+
     private:
+        char * name;
+
         static void * Monitoring(void *ptr);
         static void * Listening(void *ptr);
         bool StartServer(int port);

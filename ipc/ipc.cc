@@ -20,16 +20,20 @@
 namespace IPC{
 
 #define Close(fd) {\
+    if(fd>=0){\
     printf("\tclose socket %d (line %d)\n",fd, __LINE__);\
     close(fd);\
+    fd=-1;}\
 }
 
 #define Shutdown(fd, val){\
+    if(fd>=0){\
     printf("\tshutdown socket %d (line %d)\n", fd, __LINE__);\
     int ret=shutdown(fd,SHUT_RDWR);\
     if(ret<0){\
     perror("error");\
-    close(fd);}\
+    Close(fd);}\
+    }\
 }
 
 
@@ -47,13 +51,8 @@ Connection::Connection()
 Connection::~Connection()
 {
     //clean up
-    //printf("connection removed %s:%d\n", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
     connected = false;
-    if(sockfds>=0)
-    {
-       // printf("connection shutdown %d\n", sockfds);
-        Close(sockfds);
-    }
+    Close(sockfds);
 }
 
 bool Connection::Start()
@@ -63,8 +62,16 @@ bool Connection::Start()
     return true;
 }
 
+void Connection::Disconnect()
+{
+    connected = false;
+    Shutdown(sockfds, 2); //this will stops each connections, so their transmit and receiver thread will quit
+}
+
+
 IPC::IPC()
 {
+    name = strdup("default");
     sockfd = -1;
     port = 10000;
     host = NULL;
@@ -76,11 +83,26 @@ IPC::IPC()
 
 IPC::~IPC()
 {
+    free(name);
     //cleanup
+}
+
+bool IPC::Start(uint32_t ip, int p, bool s)
+{
+    struct in_addr addr;
+    addr.s_addr = ip;
+    return Start(inet_ntoa(addr), p, s);
 }
 
 bool IPC::Start(const char* h, int p, bool s)
 {
+    if(Running())
+    {
+        printf("IPC %s is running, can not create another one: connection %d (%d)\n", name, connections.size(), BrokenConnections());
+        return false;
+    }
+
+    printf("Restart IPC %s to %s:%d\n", name, h, p);
     port = p;
     server = s;
     if(h)
@@ -90,8 +112,14 @@ bool IPC::Start(const char* h, int p, bool s)
 
     int broken_connections = RemoveBrokenConnections();
     if(broken_connections >0)
-    printf("IPC restarted : %d broken connections removed\n", broken_connections);
+        printf("%s IPC removed %d broken connections\n", name, broken_connections);
 
+    if(connections.size()>0)
+    {
+        printf("Warning! %s IPC restarted with the following existing connection\n", name);
+        for(int i=0;i<connections.size();i++)
+            printf("\t connection from %s:%d\n", inet_ntoa(connections[i]->addr.sin_addr), ntohs(connections[i]->addr.sin_port));
+    }
     //create monitoring thread
     pthread_create(&monitor_thread, 0, Monitoring, this);
     return true;
@@ -111,7 +139,7 @@ void * IPC::Monitoring(void * ptr)
 
     ipc->monitoring_thread_running = false;
 
-    printf("------ exit monitoring thread -----\n");
+    printf("------ exit monitoring thread %s-----\n",ipc->Name());
     return NULL;
 }
 
@@ -119,7 +147,7 @@ void * Connection::Receiving(void * p)
 {
 
     Connection * ptr = (Connection*)p;
-    printf("create receiving thread for %s:%d\n",inet_ntoa(ptr->addr.sin_addr), ntohs(ptr->addr.sin_port));
+    printf(" (%d) %s create receiving thread for %s:%d\n",ptr->sockfds, ((IPC*)ptr->ipc)->Name(),inet_ntoa(ptr->addr.sin_addr), ntohs(ptr->addr.sin_port));
 
     //main loop, keep reading
     unsigned char rx_buffer[IPCBLOCKSIZE];
@@ -154,15 +182,19 @@ void * Connection::Receiving(void * p)
         }
     }
 
-    printf("exit receiving thread for %s:%d\n",inet_ntoa(ptr->addr.sin_addr), ntohs(ptr->addr.sin_port));
+    printf(" (%d) %s exit receiving thread for %s:%d\n",ptr->sockfds, ((IPC*)ptr->ipc)->Name(),  inet_ntoa(ptr->addr.sin_addr), ntohs(ptr->addr.sin_port));
     ptr->receiving_thread_running = false;
+    if(!ptr->transmiting_thread_running)
+        Close(ptr->sockfds);
+
+
     pthread_exit(NULL);
 }
 
 void * Connection::Transmiting(void *p)
 {
     Connection * ptr = (Connection*)p;
-    printf("create transmiting thread for %s:%d\n", inet_ntoa(ptr->addr.sin_addr), ntohs(ptr->addr.sin_port));
+    printf(" (%d) %s create transmiting thread for  %s:%d\n", ptr->sockfds, ((IPC*)ptr->ipc)->Name(), inet_ntoa(ptr->addr.sin_addr), ntohs(ptr->addr.sin_port));
     uint8_t txBuf[IPCBLOCKSIZE];
 
     ptr->transmiting_thread_running = true;
@@ -187,8 +219,12 @@ void * Connection::Transmiting(void *p)
         usleep(100000);
     }
 
-    printf("exit transmiting thread for %s:%d\n", inet_ntoa(ptr->addr.sin_addr), ntohs(ptr->addr.sin_port));
+    printf(" (%d) %s exit transmiting thread for %s:%d\n",ptr->sockfds, ((IPC*)ptr->ipc)->Name(),  inet_ntoa(ptr->addr.sin_addr), ntohs(ptr->addr.sin_port));
     ptr->transmiting_thread_running = false;
+
+    if(!ptr->receiving_thread_running)
+        Close(ptr->sockfds);
+
     pthread_exit(NULL);
 }
 
@@ -257,6 +293,7 @@ bool IPC::StartServer(int port)
             Connection *conn = new Connection;
             conn->sockfds = clientsockfd;
             conn->addr = client;
+            conn->ipc = this;
             conn->connected = true;
             conn->SetCallback(callback, user_data);
             connections.push_back(conn);
@@ -266,8 +303,6 @@ bool IPC::StartServer(int port)
     }
 
     Close(sockfd);
-    sockfd = -1;
-
 
     return true;
 }
@@ -298,6 +333,7 @@ bool IPC::ConnectToServer(const char * host, int port)
     printf("Success to connect to Server [%s:%d] @ %d\n", host, port, clientsockfd);
 
     Connection *conn = new Connection;
+    conn->ipc = this;
     conn->sockfds = clientsockfd;
     conn->addr = serv_addr;
     conn->connected = true;
@@ -319,7 +355,6 @@ bool IPC::ConnectToServer(const char * host, int port)
 
     //  delete conn;
     Close(conn->sockfds);
-    conn->sockfds = -1;
 
     return true;
 }
@@ -411,7 +446,7 @@ int IPC::BrokenConnections()
 void IPC::Stop()
 {
     monitoring_thread_running = false;
-    if(sockfd >0)
+    if(sockfd >=0)
     {
         Shutdown(sockfd, 2); //this will stops all connections, so monitor thread will quit
 
