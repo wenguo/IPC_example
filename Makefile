@@ -1,4 +1,4 @@
-SRC = main.cc ipc.cc lolmsg.c bytequeue.c
+SRC = main.cc ipc.cc ethlolmsg.c bytequeue.c crc8.c
 
 # Change this to your paths
 IPATH = .
@@ -14,10 +14,10 @@ EXE = test
 CXXFLAGS =-O2 -ggdb -Wall -DIPC_TEST 
 CFLAGS = -O2 -ggdb -Wall -DIPC_TEST
 
-CXX=bfin-linux-uclibc-g++
-CC=bfin-linux-uclibc-gcc
-CXXFLAGS +=-mcpu=bf561
-CFLAGS +=-mcpu=bf561 
+#CXX=bfin-linux-uclibc-g++
+#CC=bfin-linux-uclibc-gcc
+#CXXFLAGS +=-mcpu=bf561
+#CFLAGS +=-mcpu=bf561 
 
 CXXFLAGS += $(patsubst %, -I%, $(IPATH))
 LDFLAGS = -lpthread

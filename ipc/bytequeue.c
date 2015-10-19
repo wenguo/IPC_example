@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdio.h>
 
-void BQInit(ByteQueue* bq, uint8_t* buffer, uint32_t bufferSize)
+void BQInit(ByteQueue* bq, void* buffer, uint32_t bufferSize)
 {
 	bq->read = buffer;
 	bq->write = buffer;
@@ -39,8 +39,6 @@ bool BQPush(ByteQueue* bq, uint8_t byte)
 
 uint8_t BQPop(ByteQueue* bq)
 {
-	if (bq->count == 0)
-		return 0;	// FIXME: Maybe another behavior could be better...
 	uint8_t result = *bq->read++;
 	if (bq->read >= bq->end)
 		bq->read = bq->buffer;
@@ -48,12 +46,13 @@ uint8_t BQPop(ByteQueue* bq)
 	return result;
 }
 
-uint32_t BQPushBytes(ByteQueue* bq, const uint8_t* data, uint32_t count)
+uint32_t BQPushBytes(ByteQueue* bq, const void* data, uint32_t count)
 {
-	register int32_t bqcount = bq->count;
+
+	register uint32_t bqcount = bq->count;
 	register uint8_t* bqwrite = bq->write;
-	register int32_t write = bq->end - bqwrite;
-	int32_t overwrite = count - bq->size + bqcount;
+	register int write = bq->end - bqwrite;
+	int overwrite = count - bq->size + bqcount;
 	if (overwrite <= 0)
 	{
 		if (count < write)
@@ -66,15 +65,15 @@ uint32_t BQPushBytes(ByteQueue* bq, const uint8_t* data, uint32_t count)
 		{
 			memcpy(bqwrite, data, write);
 			data += write;
-			write = count - write;
+			write = count - write;		
 			memcpy(bq->buffer, data, write);
 			bq->count = bqcount + count;
 			bq->write = bq->buffer + write;
 		}
 		return 0;
 	}
-	else
-	{	// We overwrite something and the queue is full afterwards
+    else
+    {	// We overwrite something and the queue is full afterwards
 		if (count < write)
 		{	// We can write without wraparound
 			memcpy(bqwrite, data, count);
@@ -98,15 +97,15 @@ uint32_t BQPushBytes(ByteQueue* bq, const uint8_t* data, uint32_t count)
 		return overwrite;
 	}
 	/*
-	uint16_t overwritten = 0;
+	uint32_t overwritten = 0;
 	uint8_t* indata = data;
-	for (uint16_t i = 0; i < count; i++)
+	for (uint32_t i = 0; i < count; i++)
 		if (BQPush(bq, *indata++))
 			overwritten++;
 	return overwritten;*/
 }
 
-uint32_t BQPopBytes(ByteQueue* bq, uint8_t* buf, uint32_t count)
+uint32_t BQPopBytes(ByteQueue* bq, void* buf, uint32_t count)
 {
 
 	register uint8_t* bqread = bq->read;
@@ -132,24 +131,23 @@ uint32_t BQPopBytes(ByteQueue* bq, uint8_t* buf, uint32_t count)
 	}
 	return count;
 /*
-	uint16_t read = bq->count;
+	uint32_t read = bq->count;
 	uint8_t* outdata = buf;
 	if (count < read)
 		read = count;
-	for (uint16_t i = 0; i < read; i++)
+	for (uint32_t i = 0; i < read; i++)
 		*outdata++ = BQPop(bq);
 	return read;*/
 }
 
-uint32_t BQPeekBytes(ByteQueue* bq, uint8_t* buf, uint32_t count)
+uint32_t BQPeekBytes(ByteQueue* bq, void* buf, uint32_t count)
 {
 	uint32_t read = bq->count;
 	if (count < read)
 		read = count;
 	uint8_t* outdata = buf;
 	uint8_t* temp = bq->read;
-        uint32_t i;
-	for (i = 0; i < read; i++)
+	for (uint32_t i = 0; i < read; i++)
 	{
 		*outdata++ = *temp++;
 		if (temp >= bq->end)
@@ -172,4 +170,10 @@ void BQRemove(ByteQueue* bq, uint32_t count)
 		bq->read = bq->write;
 		bq->count = 0;
 	}
+}
+
+void BQClear(ByteQueue* bq)
+{
+	bq->read = bq->write;
+	bq->count = 0;	
 }

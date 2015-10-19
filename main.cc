@@ -10,8 +10,8 @@
 bool userQuit = false;
 int count=0;
 void signalHandler(int dummy);
-static void ServerConnection(const LolMessage*msg,void *conn, void *ptr);
-static void ClientConnection(const LolMessage*msg, void *conn, void *ptr);
+static void ServerConnection(const ELolMessage*msg,void *conn, void *ptr);
+static void ClientConnection(const ELolMessage*msg, void *conn, void *ptr);
 
 int main(int argc, const char**argv)
 {
@@ -88,7 +88,7 @@ int main(int argc, const char**argv)
 }
 
 
-void ServerConnection(const LolMessage*msg,void *conn, void *ptr)
+void ServerConnection(const ELolMessage*msg,void *conn, void *ptr)
 {
   //  printf("received something\n");
     //IPC::IPC *monitor_ipc = (IPC::IPC*)ptr;
@@ -105,7 +105,7 @@ void ServerConnection(const LolMessage*msg,void *conn, void *ptr)
     }
 }
 
-void ClientConnection(const LolMessage*msg, void *conn, void *ptr)
+void ClientConnection(const ELolMessage*msg, void *conn, void *ptr)
 {
     //IPC::IPC *client_ipc = (IPC::IPC*)ptr;
     switch(msg->command)
